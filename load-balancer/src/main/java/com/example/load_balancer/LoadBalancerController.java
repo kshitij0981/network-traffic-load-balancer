@@ -27,7 +27,7 @@ public class LoadBalancerController {
             @RequestParam String event,
             @RequestParam String seat) {
 
-        int serverIndex = getLeastLoadedServer();
+        int serverIndex = getNextServer();
 
         activeRequests[serverIndex]++;
         requestCount[serverIndex]++;
@@ -79,19 +79,16 @@ public class LoadBalancerController {
         }
     }
 
-    private synchronized int getLeastLoadedServer() {
+   private int nextServer = 0;
 
-        int index = 0;
+private synchronized int getNextServer() {
 
-        for (int i = 1; i < activeRequests.length; i++) {
+    int index = nextServer;
 
-            if (activeRequests[i] < activeRequests[index]) {
-                index = i;
-            }
-        }
+    nextServer = (nextServer + 1) % servers.size();
 
-        return index;
-    }
+    return index;
+}
 
     @GetMapping("/admin/stats")
     public synchronized List<Map<String, Object>> stats() {
