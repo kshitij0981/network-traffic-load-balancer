@@ -336,13 +336,17 @@
 <script>
 
 let selectedSeat = null;
-
 let selectedEvent = "";
 
+
+// ===============================
+// OPEN BOOKING
+// ===============================
 
 function openBooking(eventName) {
 
     selectedEvent = eventName;
+    selectedSeat = null;
 
     document.getElementById("eventTitle").innerText =
         eventName;
@@ -356,6 +360,11 @@ function openBooking(eventName) {
     document.getElementById("booking").style.display =
         "block";
 
+    document.getElementById("selected").innerText =
+        "Selected Seat: None";
+
+    document.getElementById("result").innerHTML = "";
+
     window.scrollTo({
         top: 0,
         behavior: "smooth"
@@ -364,6 +373,10 @@ function openBooking(eventName) {
     loadSeats();
 }
 
+
+// ===============================
+// CLOSE BOOKING
+// ===============================
 
 function closeBooking() {
 
@@ -377,6 +390,7 @@ function closeBooking() {
         "flex";
 
     selectedSeat = null;
+    selectedEvent = "";
 
     document.getElementById("result").innerHTML = "";
 
@@ -384,9 +398,12 @@ function closeBooking() {
         top: 0,
         behavior: "smooth"
     });
-
 }
 
+
+// ===============================
+// LOAD SEATS
+// ===============================
 
 async function loadSeats() {
 
@@ -398,127 +415,242 @@ async function loadSeats() {
 
     try {
 
-        const response =
-            await fetch("/api/seats");
+        // Use the event selected by the user
+        const eventName = selectedEvent;
+
+        if (!eventName) {
+            throw new Error("Event name not found");
+        }
+
+        console.log(
+            "Loading seats for:",
+            eventName
+        );
+
+        // Send event parameter to backend
+        const response = await fetch(
+            `/api/seats?event=${encodeURIComponent(eventName)}`
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `Server returned ${response.status}`
+            );
+        }
 
         const seats =
             await response.json();
 
+        console.log(
+            "Seats loaded:",
+            seats.length
+        );
+
         container.innerHTML = "";
 
+        // Show first 50 seats
         seats.slice(0, 50).forEach(seat => {
 
             const button =
                 document.createElement("button");
 
             button.innerText =
-                seat.id;
+                seat.seatNumber;
 
-            button.className =
-                "seat " +
-                (seat.booked
-                    ? "booked"
-                    : "available");
+            button.classList.add("seat");
 
-            if (!seat.booked) {
+            // ===============================
+            // BOOKED SEAT
+            // ===============================
 
-                button.onclick = () => {
+            if (seat.booked) {
 
-                    selectedSeat =
-                        seat.id;
+                button.disabled = true;
 
-                    document
-                        .querySelectorAll(".seat")
-                        .forEach(s =>
-                            s.classList.remove("selected")
-                        );
-
-                    button.classList.add("selected");
-
-                    document.getElementById("selected")
-                        .innerText =
-                        "Selected Seat: " +
-                        selectedSeat;
-
-                };
+                button.classList.add("booked");
 
             }
 
+            // ===============================
+            // AVAILABLE SEAT
+            // ===============================
+
+            else {
+
+                button.classList.add("available");
+
+                button.addEventListener(
+                    "click",
+                    () => selectSeat(
+                        seat,
+                        button
+                    )
+                );
+            }
+
             container.appendChild(button);
-
         });
-
-    } catch (error) {
-
-        container.innerHTML =
-            "Unable to load seats.";
 
     }
 
+    catch (error) {
+
+        console.error(
+            "Seat loading error:",
+            error
+        );
+
+        container.innerHTML =
+            "Unable to load seats.";
+    }
 }
 
+
+// ===============================
+// SELECT SEAT
+// ===============================
+
+function selectSeat(seat, button) {
+
+    // Remove previous selection
+    document.querySelectorAll(
+        "#seats button"
+    ).forEach(btn => {
+
+        btn.classList.remove("selected");
+
+    });
+
+    // Set selected seat
+    selectedSeat =
+        seat.seatNumber;
+
+    // Change button appearance
+    button.classList.add(
+        "selected"
+    );
+
+    // Update selected seat text
+    document.getElementById(
+        "selected"
+    ).innerText =
+        `Selected Seat: ${selectedSeat}`;
+
+    console.log(
+        "Selected seat:",
+        selectedSeat
+    );
+}
+
+
+// ===============================
+// BOOK TICKET
+// ===============================
 
 async function bookSeat() {
 
     if (!selectedSeat) {
 
-        alert("Please select a seat first.");
-
-        return;
-
-    }
-
-
-    const response =
-        await fetch(
-            `/book?seat=${selectedSeat}`,
-            {
-                method: "POST"
-            }
+        alert(
+            "Please select a seat first."
         );
 
+        return;
+    }
 
-    const result =
-        await response.json();
+    if (!selectedEvent) {
 
+        alert(
+            "Please select an event."
+        );
 
-    const resultBox =
-        document.getElementById("result");
+        return;
+    }
 
+    try {
 
-    if (result.success) {
+        console.log(
+            "Booking:",
+            selectedEvent,
+            selectedSeat
+        );
 
-        resultBox.innerHTML =
+        // Send BOTH event and seat
+        const response =
+            await fetch(
+                `/book?event=${encodeURIComponent(selectedEvent)}&seat=${encodeURIComponent(selectedSeat)}`,
+                {
+                    method: "POST"
+                }
+            );
 
-            `✅ Booking Successful!<br>
-             <strong>${selectedEvent}</strong><br>
-             Seat: ${result.seat}<br>
-             Server: ${result.server}<br>
-             Latency: ${result.latency}`;
+        if (!response.ok) {
 
-        resultBox.className =
-            "success";
+            throw new Error(
+                `Server returned ${response.status}`
+            );
+        }
 
-    } else {
+        const result =
+            await response.json();
 
-        resultBox.innerHTML =
-            "❌ Booking Failed — Seat already booked.";
+        const resultBox =
+            document.getElementById(
+                "result"
+            );
 
-        resultBox.className =
-            "error";
+        if (result.success) {
+
+            resultBox.innerHTML =
+                `✅ Booking Successful!<br>
+                 <strong>${result.event}</strong><br>
+                 Seat: ${result.seat}<br>
+                 Server: ${result.server}`;
+
+            resultBox.className =
+                "success";
+
+        }
+
+        else {
+
+            resultBox.innerHTML =
+                "❌ Booking Failed — Seat already booked.";
+
+            resultBox.className =
+                "error";
+        }
+
+        // Reset selected seat
+        selectedSeat = null;
+
+        document.getElementById(
+            "selected"
+        ).innerText =
+            "Selected Seat: None";
+
+        // Reload seats
+        loadSeats();
 
     }
 
+    catch (error) {
 
-    selectedSeat = null;
+        console.error(
+            "Booking error:",
+            error
+        );
 
-    document.getElementById("selected")
-        .innerText =
-        "Selected Seat: None";
+        document.getElementById(
+            "result"
+        ).innerHTML =
+            "❌ Booking failed. Please try again.";
 
-
-    loadSeats();
-
+        document.getElementById(
+            "result"
+        ).className =
+            "error";
+    }
 }
 
 </script>

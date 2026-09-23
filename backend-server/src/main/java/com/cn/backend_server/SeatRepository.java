@@ -6,12 +6,25 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 public interface SeatRepository extends JpaRepository<Seat, String> {
 
-    // Atomic: only succeeds if the seat is still free.
-    // Returns 1 if booked now, 0 if someone already took it.
+    // Book a specific seat for a specific event
     @Modifying
     @Transactional
-    @Query("UPDATE Seat s SET s.booked = true WHERE s.id = :id AND s.booked = false")
-    int book(@Param("id") String id);
+    @Query("""
+           UPDATE Seat s
+           SET s.booked = true
+           WHERE s.event = :event
+           AND s.seatNumber = :seatNumber
+           AND s.booked = false
+           """)
+    int book(
+            @Param("event") String event,
+            @Param("seatNumber") String seatNumber
+    );
+
+    // Get seats for one specific event
+    List<Seat> findByEvent(String event);
 }

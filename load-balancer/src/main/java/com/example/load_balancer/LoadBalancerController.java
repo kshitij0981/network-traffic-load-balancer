@@ -23,7 +23,8 @@ public class LoadBalancerController {
     private final int[] failedCount = new int[3];
 
     @PostMapping("/book")
-    public synchronized Map<String, Object> book(
+    public Map<String, Object> book(
+            @RequestParam String event,
             @RequestParam String seat) {
 
         int serverIndex = getLeastLoadedServer();
@@ -34,14 +35,18 @@ public class LoadBalancerController {
         long start = System.currentTimeMillis();
 
         try {
+
             Map response = client.post()
-                    .uri(servers.get(serverIndex) + "/book?seat=" + seat)
+                    .uri(servers.get(serverIndex)
+                            + "/book?event=" + event
+                            + "&seat=" + seat)
                     .retrieve()
                     .body(Map.class);
 
             long latency = System.currentTimeMillis() - start;
 
-            boolean success = Boolean.TRUE.equals(response.get("success"));
+            boolean success =
+                    Boolean.TRUE.equals(response.get("success"));
 
             if (success) {
                 successCount[serverIndex]++;
@@ -52,6 +57,7 @@ public class LoadBalancerController {
             Map<String, Object> result = new HashMap<>();
 
             result.put("success", success);
+            result.put("event", event);
             result.put("seat", seat);
             result.put("server", 8081 + serverIndex);
             result.put("latency", latency + " ms");
@@ -73,7 +79,7 @@ public class LoadBalancerController {
         }
     }
 
-    private int getLeastLoadedServer() {
+    private synchronized int getLeastLoadedServer() {
 
         int index = 0;
 
@@ -113,10 +119,10 @@ public class LoadBalancerController {
     }
 
     @GetMapping("/api/seats")
-    public Object seats() {
+    public Object seats(@RequestParam String event) {
 
         return client.get()
-                .uri("http://localhost:8081/api/seats")
+                .uri("http://localhost:8081/api/seats?event=" + event)
                 .retrieve()
                 .body(Object.class);
     }
